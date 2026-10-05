@@ -294,63 +294,47 @@ public class PatchJNAAgent implements ClassFileTransformer {
         }
     }
 
-    private static byte[] makeNoOpCode(
-            byte[] codeAttribute) throws IOException {
+private static byte[] makeNoOpCode(
+        byte[] codeAttribute) throws IOException {
 
-        DataInputStream in =
-                new DataInputStream(
-                        new ByteArrayInputStream(codeAttribute)
-                );
-
-        in.readUnsignedShort();
-        int maxLocals = in.readUnsignedShort();
-        int codeLength = in.readInt();
-
-        if (codeLength < 1) {
-            throw new IOException(
-                    "MacosUtil method has empty bytecode"
+    DataInputStream in =
+            new DataInputStream(
+                    new ByteArrayInputStream(codeAttribute)
             );
-        }
 
-        byte[] code = new byte[codeLength];
-        in.readFully(code);
+    // Read the original Code attribute header.
+    in.readUnsignedShort(); // original max_stack
+    int maxLocals = in.readUnsignedShort();
+    int codeLength = in.readInt();
 
-        // RETURN
-        code[0] = (byte) 0xB1;
-
-        // NOP
-        for (int i = 1; i < code.length; i++) {
-            code[i] = 0x00;
-        }
-
-        ByteArrayOutputStream output =
-                new ByteArrayOutputStream();
-
-        DataOutputStream out =
-                new DataOutputStream(output);
-
-        out.writeShort(0);
-        out.writeShort(maxLocals);
-        out.writeInt(codeLength);
-        out.write(code);
-
-        int exceptionTableLength =
-                in.readUnsignedShort();
-
-        out.writeShort(exceptionTableLength);
-
-        for (int i = 0; i < exceptionTableLength; i++) {
-            out.writeShort(in.readUnsignedShort());
-            out.writeShort(in.readUnsignedShort());
-            out.writeShort(in.readUnsignedShort());
-            out.writeShort(in.readUnsignedShort());
-        }
-
-        out.writeShort(0);
-        out.flush();
-
-        return output.toByteArray();
+    if (codeLength < 1) {
+        throw new IOException(
+                "MacosUtil method has empty bytecode"
+        );
     }
+
+    // The original bytecode, exception table, and nested
+    // Code attributes are intentionally discarded.
+    //
+    // We replace the entire method body with a single
+    // RETURN instruction.
+    ByteArrayOutputStream output =
+            new ByteArrayOutputStream();
+
+    DataOutputStream out =
+            new DataOutputStream(output);
+
+    out.writeShort(0);       // max_stack
+    out.writeShort(maxLocals);
+    out.writeInt(1);         // code_length
+    out.writeByte(0xB1);     // RETURN
+    out.writeShort(0);       // exception_table_length
+    out.writeShort(0);       // attributes_count
+
+    out.flush();
+
+    return output.toByteArray();
+}
 
     public static void premain(
             String args,
